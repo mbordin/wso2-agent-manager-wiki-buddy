@@ -37,7 +37,7 @@ curl -s localhost:8000/chat -H 'content-type: application/json' \
    ```
 6. Fai qualche domanda e apri **Traces** nella console: vedi le chiamate LLM e i tool MCP.
 
-Per eseguirlo come agente Platform-Hosted: Source Code, Project Path `/wiki-buddy`, Python, Start Command `python main.py` (la porta è 8000). La strumentazione la inietta la piattaforma, quindi non serve `amp-instrumentation`.
+Per eseguirlo come agente Platform-Hosted: Source Code, Project Path `/wiki-buddy`, Python, Start Command `python main.py` (il Chat Agent usa `POST /chat` sulla porta 8000: il codice ignora la variabile `PORT` iniettata e ascolta su `AGENT_PORT`, default 8000). La strumentazione la inietta la piattaforma, quindi non serve `amp-instrumentation`.
 
 ## Idee per la demo
 

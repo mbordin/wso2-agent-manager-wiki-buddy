@@ -164,6 +164,7 @@ def serve() -> None:
     class ChatIn(BaseModel):
         message: str
         session_id: str | None = None
+        context: dict | None = None
 
     sessions: dict[str, list[dict]] = {}
 
@@ -181,11 +182,15 @@ def serve() -> None:
     @app.post("/chat")
     async def chat(body: ChatIn):
         hist = sessions.setdefault(body.session_id or "default", [])
-        answer = await buddy.ask(body.message, hist[-10:])
+        try:
+            answer = await buddy.ask(body.message, hist[-10:])
+        except Exception as exc:  # l'errore dell'LLM arriva nella chat invece di un 500 opaco
+            print(f"Errore LLM: {exc!r}", flush=True)
+            return {"response": f"Ops, non riesco a parlare con l'LLM: {type(exc).__name__}: {exc}"}
         hist += [{"role": "user", "content": body.message}, {"role": "assistant", "content": answer}]
         return {"response": answer}
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("AGENT_PORT", "8000")))  # Chat Agent: porta fissa 8000, ignoro PORT
 
 
 if __name__ == "__main__":
