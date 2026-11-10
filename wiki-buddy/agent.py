@@ -16,6 +16,7 @@ import os
 import sys
 from contextlib import AsyncExitStack
 
+import anyio
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from mcp import ClientSession
@@ -57,42 +58,72 @@ def mcp_headers() -> dict:
 
 
 class WikiBuddy:
+    """Il collegamento MCP vive in un task in background: il server HTTP parte subito
+    anche se l'MCP e' irraggiungibile, e la connessione viene ritentata."""
+
     def __init__(self) -> None:
         self.llm = make_llm()
-        self.stack = AsyncExitStack()
         self.session: ClientSession | None = None
         self.tools: list[dict] = []
+        self.ready = asyncio.Event()
+        self._stop = asyncio.Event()
+        self._task: asyncio.Task | None = None
 
-    async def start(self) -> None:
-        http = await self.stack.enter_async_context(httpx2.AsyncClient(headers=mcp_headers()))
-        read, write = await self.stack.enter_async_context(
-            streamable_http_client(MCP_URL, http_client=http)
-        )
-        self.session = await self.stack.enter_async_context(ClientSession(read, write))
-        await self.session.initialize()
-        listed = await self.session.list_tools()
-        self.tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description or "",
-                    "parameters": t.input_schema,
-                },
-            }
-            for t in listed.tools
-        ]
-        print(f"MCP collegato: {MCP_URL} ({', '.join(t['function']['name'] for t in self.tools)})")
+    async def _run_mcp(self) -> None:
+        while not self._stop.is_set():
+            try:
+                async with AsyncExitStack() as stack:
+                    http = await stack.enter_async_context(
+                        httpx2.AsyncClient(headers=mcp_headers(), timeout=httpx2.Timeout(10, read=300)))
+                    read, write = await stack.enter_async_context(
+                        streamable_http_client(MCP_URL, http_client=http))
+                    session = await stack.enter_async_context(ClientSession(read, write))
+                    with anyio.fail_after(20):
+                        await session.initialize()
+                        listed = await session.list_tools()
+                    self.tools = [
+                        {"type": "function", "function": {
+                            "name": t.name, "description": t.description or "",
+                            "parameters": t.input_schema}}
+                        for t in listed.tools
+                    ]
+                    self.session = session
+                    self.ready.set()
+                    print(f"MCP collegato: {MCP_URL} ({', '.join(t['function']['name'] for t in self.tools)})", flush=True)
+                    await self._stop.wait()
+                    return
+            except Exception as exc:
+                self.ready.clear()
+                self.session = None
+                print(f"MCP non raggiungibile ({MCP_URL}): {exc!r}. Riprovo tra 15s", flush=True)
+                try:
+                    await asyncio.wait_for(self._stop.wait(), 15)
+                except asyncio.TimeoutError:
+                    pass
+
+    async def start(self, wait: float = 0) -> None:
+        self._task = asyncio.create_task(self._run_mcp())
+        if wait:
+            try:
+                await asyncio.wait_for(self.ready.wait(), wait)
+            except asyncio.TimeoutError:
+                pass
 
     async def stop(self) -> None:
-        await self.stack.aclose()
+        self._stop.set()
+        if self._task:
+            await self._task
 
     async def ask(self, message: str, history: list[dict] | None = None) -> str:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}, *(history or []),
+        tools = self.tools if self.ready.is_set() else []
+        sys_prompt = SYSTEM_PROMPT if tools else SYSTEM_PROMPT + (
+            "\nATTENZIONE: i tool MCP non sono al momento raggiungibili: dillo all'utente e "
+            "rispondi solo con quello che sai, segnalando che potrebbe non essere aggiornato.")
+        messages = [{"role": "system", "content": sys_prompt}, *(history or []),
                     {"role": "user", "content": message}]
         for _ in range(MAX_STEPS):
             resp = await self.llm.chat.completions.create(
-                model=MODEL, messages=messages, tools=self.tools or None
+                model=MODEL, messages=messages, tools=tools or None
             )
             msg = resp.choices[0].message
             if not msg.tool_calls:
@@ -111,7 +142,7 @@ class WikiBuddy:
 
 async def chat_cli() -> None:
     buddy = WikiBuddy()
-    await buddy.start()
+    await buddy.start(wait=15)
     history: list[dict] = []
     print("Wiki-Buddy pronto. Prova: 'Di cosa si occupa wso2/agent-manager?' (Ctrl-C per uscire)")
     try:
