@@ -32,15 +32,16 @@ curl -s localhost:8000/chat -H 'content-type: application/json' \
    (e la chiave in `MCP_API_KEY`). Così anche le chiamate MCP sono governate e visibili nelle trace.
 5. Avvia con la strumentazione OpenTelemetry:
    ```bash
+   pip install amp-instrumentation   # solo per l'esecuzione Externally-Hosted
    amp-instrument python agent.py serve
    ```
 6. Fai qualche domanda e apri **Traces** nella console: vedi le chiamate LLM e i tool MCP.
 
-Per eseguirlo come agente Platform-Hosted: Source Code, Project Path `/wiki-buddy`, Python, Start Command `python agent.py serve`.
+Per eseguirlo come agente Platform-Hosted: Source Code, Project Path `/wiki-buddy`, Python, Start Command `python main.py` (la porta è 8000). La strumentazione la inietta la piattaforma, quindi non serve `amp-instrumentation`.
 
 ## Idee per la demo
 
 - "Spiegami l'architettura di wso2/agent-manager" / "Come si installa?"
 - Confronta due repo: "Differenze tra wso2/api-manager e wso2/agent-manager?"
 
-Nota: con le versioni correnti (`openai` 3.x, `mcp` 2.x) il client MCP è stato verificato contro un server locale; l'OpenAI loop richiede una tua chiave.
+Nota: `mcp` è fissato alla serie 1.x e `openai` alla 1.x perché l'instrumentation Traceloop della piattaforma è compatibile con quelle API. Il client MCP è stato verificato contro un server locale; il giro con OpenAI richiede una tua chiave.

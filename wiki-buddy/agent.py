@@ -20,8 +20,7 @@ import anyio
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from mcp import ClientSession
-import httpx2
-from mcp.client.streamable_http import streamable_http_client
+from mcp.client.streamable_http import streamablehttp_client
 
 load_dotenv()
 
@@ -73,10 +72,8 @@ class WikiBuddy:
         while not self._stop.is_set():
             try:
                 async with AsyncExitStack() as stack:
-                    http = await stack.enter_async_context(
-                        httpx2.AsyncClient(headers=mcp_headers(), timeout=httpx2.Timeout(10, read=300)))
-                    read, write = await stack.enter_async_context(
-                        streamable_http_client(MCP_URL, http_client=http))
+                    read, write, _ = await stack.enter_async_context(
+                        streamablehttp_client(MCP_URL, headers=mcp_headers()))
                     session = await stack.enter_async_context(ClientSession(read, write))
                     with anyio.fail_after(20):
                         await session.initialize()
@@ -84,7 +81,7 @@ class WikiBuddy:
                     self.tools = [
                         {"type": "function", "function": {
                             "name": t.name, "description": t.description or "",
-                            "parameters": t.input_schema}}
+                            "parameters": t.inputSchema}}
                         for t in listed.tools
                     ]
                     self.session = session
