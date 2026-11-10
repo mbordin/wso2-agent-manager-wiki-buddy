@@ -1,0 +1,6 @@
+openai>=3,<4
+mcp>=2.3,<3
+fastapi>=0.110
+uvicorn>=0.29
+python-dotenv>=1.0
+amp-instrumentation>=0.2
