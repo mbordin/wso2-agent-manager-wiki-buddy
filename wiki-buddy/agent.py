@@ -157,7 +157,7 @@ def serve() -> None:
         hist += [{"role": "user", "content": body.message}, {"role": "assistant", "content": answer}]
         return {"response": answer}
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8010")))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
 
 
 if __name__ == "__main__":

@@ -15,8 +15,8 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # imposta OPENAI_API_KEY (lascia vuote le LLM_PROVIDER_*)
 python agent.py chat        # chat da terminale
-python agent.py serve       # API su http://localhost:8010
-curl -s localhost:8010/chat -H 'content-type: application/json' \
+python agent.py serve       # API su http://localhost:8000
+curl -s localhost:8000/chat -H 'content-type: application/json' \
   -d '{"message":"Di cosa si occupa wso2/agent-manager?"}'
 ```
 
